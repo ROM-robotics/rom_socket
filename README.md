@@ -47,6 +47,7 @@ sudo apt install -y qt6-tools-dev cmake build-essential
 sudo apt install qml6-module-qtmultimedia libqt6multimedia6*
 # Install OpenSSL
 sudo apt install -y libssl-dev
+sudo apt update && sudo apt install -y libmpv-dev
 
 # Verify installation
 qmake6 --version

@@ -65,26 +65,22 @@ KzyBByrueDl2o25D6iWm1so=
 
 SslServer::SslServer(QObject *parent) : QTcpServer(parent) 
 {
-    // Initialize audio player
-    audioPlayer_ = new QMediaPlayer(this);
-    audioOutput_ = new QAudioOutput(this);
-    audioPlayer_->setAudioOutput(audioOutput_);
-    audioOutput_->setVolume(0.7); // 70% volume
+    // Initialize audio mpv player
+    audioMpv_ = mpv_create();
+    if (audioMpv_) {
+        mpv_set_option_string(audioMpv_, "vo", "null"); // No video output for audio
+        mpv_set_option_string(audioMpv_, "volume", "70");
+        mpv_initialize(audioMpv_);
+        qDebug() << "Audio MPV player initialized";
+    }
     
-    // Initialize video player
-    videoPlayer_ = new QMediaPlayer(this);
-    videoOutput_ = new QAudioOutput(this);
-    videoPlayer_->setAudioOutput(videoOutput_);
-    videoOutput_->setVolume(0.7); // 70% volume
-    
-    // Connect signals for debugging
-    connect(audioPlayer_, &QMediaPlayer::playbackStateChanged, this, [](QMediaPlayer::PlaybackState state) {
-        qDebug() << "Audio playback state:" << state;
-    });
-    
-    connect(videoPlayer_, &QMediaPlayer::playbackStateChanged, this, [](QMediaPlayer::PlaybackState state) {
-        qDebug() << "Video playback state:" << state;
-    });
+    // Initialize video mpv player
+    videoMpv_ = mpv_create();
+    if (videoMpv_) {
+        mpv_set_option_string(videoMpv_, "volume", "70");
+        mpv_initialize(videoMpv_);
+        qDebug() << "Video MPV player initialized";
+    }
 }
 
 void SslServer::incomingConnection(qintptr socketDescriptor) 
@@ -321,6 +317,24 @@ void SslServer::processPackets(QSslSocket *socket, QByteArray &buffer, quint32 &
                 qDebug() << "Toggle audio play/pause requested";
                 toggleAudioPlayback();
                 response = "Audio playback toggled";
+            } else if (command.startsWith("set_audio_volume:")) {
+                int volume = command.mid(17).toInt(); // Remove "set_audio_volume:" prefix
+                qDebug() << "Set audio volume requested:" << volume;
+                setAudioVolume(volume);
+                response = "Audio volume set to: " + QString::number(volume);
+            } else if (command.startsWith("set_video_volume:")) {
+                int volume = command.mid(17).toInt(); // Remove "set_video_volume:" prefix
+                qDebug() << "Set video volume requested:" << volume;
+                setVideoVolume(volume);
+                response = "Video volume set to: " + QString::number(volume);
+            } else if (command == "get_audio_volume") {
+                int volume = getAudioVolume();
+                qDebug() << "Get audio volume requested";
+                response = "Audio volume: " + QString::number(volume);
+            } else if (command == "get_video_volume") {
+                int volume = getVideoVolume();
+                qDebug() << "Get video volume requested";
+                response = "Video volume: " + QString::number(volume);
             } else if (command == "llm_response") {
                 response = llmResponse(command);
                 qDebug() << "Sending LLM response to client";
@@ -373,7 +387,7 @@ void SslServer::processPackets(QSslSocket *socket, QByteArray &buffer, quint32 &
 
 void SslServer::playAudio(const QString &filename)
 {
-    if (!audioPlayer_) return;
+    if (!audioMpv_) return;
     
     QString filePath = audio_directory + filename;
     QFileInfo fileInfo(filePath);
@@ -384,15 +398,15 @@ void SslServer::playAudio(const QString &filename)
     }
     
     currentAudioFile_ = filename;
-    audioPlayer_->setSource(QUrl::fromLocalFile(filePath));
-    audioPlayer_->play();
+    const char* cmd[] = {"loadfile", filePath.toUtf8().constData(), NULL};
+    mpv_command(audioMpv_, cmd);
     
     qDebug() << "Playing audio file:" << filePath;
 }
 
 void SslServer::playVideo(const QString &filename)
 {
-    if (!videoPlayer_) return;
+    if (!videoMpv_) return;
     
     QString filePath = video_directory + filename;
     QFileInfo fileInfo(filePath);
@@ -403,52 +417,86 @@ void SslServer::playVideo(const QString &filename)
     }
     
     currentVideoFile_ = filename;
-    videoPlayer_->setSource(QUrl::fromLocalFile(filePath));
-    videoPlayer_->play();
+    const char* cmd[] = {"loadfile", filePath.toUtf8().constData(), NULL};
+    mpv_command(videoMpv_, cmd);
     
     qDebug() << "Playing video file:" << filePath;
 }
 
 void SslServer::toggleAudioPlayback()
 {
-    if (!audioPlayer_) return;
+    if (!audioMpv_) return;
     
-    QMediaPlayer::PlaybackState state = audioPlayer_->playbackState();
+    // Get pause state
+    int pause = 0;
+    mpv_get_property(audioMpv_, "pause", MPV_FORMAT_FLAG, &pause);
     
-    if (state == QMediaPlayer::PlayingState) {
-        audioPlayer_->pause();
-        qDebug() << "Audio paused";
-    } else if (state == QMediaPlayer::PausedState) {
-        audioPlayer_->play();
-        qDebug() << "Audio resumed";
-    } else {
-        // If stopped, replay current file
-        if (!currentAudioFile_.isEmpty()) {
-            playAudio(currentAudioFile_);
-        } else {
-            qWarning() << "No audio file to play";
-        }
-    }
+    // Toggle pause
+    pause = !pause;
+    mpv_set_property(audioMpv_, "pause", MPV_FORMAT_FLAG, &pause);
+    
+    qDebug() << (pause ? "Audio paused" : "Audio resumed");
 }
 
 void SslServer::toggleVideoPlayback()
 {
-    if (!videoPlayer_) return;
+    if (!videoMpv_) return;
     
-    QMediaPlayer::PlaybackState state = videoPlayer_->playbackState();
+    // Get pause state
+    int pause = 0;
+    mpv_get_property(videoMpv_, "pause", MPV_FORMAT_FLAG, &pause);
     
-    if (state == QMediaPlayer::PlayingState) {
-        videoPlayer_->pause();
-        qDebug() << "Video paused";
-    } else if (state == QMediaPlayer::PausedState) {
-        videoPlayer_->play();
-        qDebug() << "Video resumed";
-    } else {
-        // If stopped, replay current file
-        if (!currentVideoFile_.isEmpty()) {
-            playVideo(currentVideoFile_);
-        } else {
-            qWarning() << "No video file to play";
-        }
-    }
+    // Toggle pause
+    pause = !pause;
+    mpv_set_property(videoMpv_, "pause", MPV_FORMAT_FLAG, &pause);
+    
+    qDebug() << (pause ? "Video paused" : "Video resumed");
+}
+
+void SslServer::setAudioVolume(int volume)
+{
+    if (!audioMpv_) return;
+    
+    // Clamp volume between 0 and 100
+    if (volume < 0) volume = 0;
+    if (volume > 100) volume = 100;
+    
+    int64_t vol = volume;
+    mpv_set_property(audioMpv_, "volume", MPV_FORMAT_INT64, &vol);
+    
+    qDebug() << "Audio volume set to:" << volume;
+}
+
+void SslServer::setVideoVolume(int volume)
+{
+    if (!videoMpv_) return;
+    
+    // Clamp volume between 0 and 100
+    if (volume < 0) volume = 0;
+    if (volume > 100) volume = 100;
+    
+    int64_t vol = volume;
+    mpv_set_property(videoMpv_, "volume", MPV_FORMAT_INT64, &vol);
+    
+    qDebug() << "Video volume set to:" << volume;
+}
+
+int SslServer::getAudioVolume()
+{
+    if (!audioMpv_) return 0;
+    
+    int64_t volume = 0;
+    mpv_get_property(audioMpv_, "volume", MPV_FORMAT_INT64, &volume);
+    
+    return static_cast<int>(volume);
+}
+
+int SslServer::getVideoVolume()
+{
+    if (!videoMpv_) return 0;
+    
+    int64_t volume = 0;
+    mpv_get_property(videoMpv_, "volume", MPV_FORMAT_INT64, &volume);
+    
+    return static_cast<int>(volume);
 }

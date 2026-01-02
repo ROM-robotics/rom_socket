@@ -15,8 +15,11 @@ set(CMAKE_AUTOUIC ON)
 find_package(Qt6 6.2 REQUIRED COMPONENTS
     Core
     Network
-    Multimedia
 )
+
+# libmpv ကို ရှာဖွေခြင်း
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
 
 # Source ဖိုင်တွေကို သတ်မှတ်ခြင်း
 set(PROJECT_SOURCES
@@ -30,11 +33,11 @@ add_executable(${PROJECT_NAME}
     ${PROJECT_SOURCES}
 )
 
-# Qt libraries တွေကို link လုပ်ခြင်း
+# Qt libraries နဲ့ libmpv ကို link လုပ်ခြင်း
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Network
-    Qt6::Multimedia
+    PkgConfig::MPV
 )
 
 # Include directories

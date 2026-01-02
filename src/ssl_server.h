@@ -6,8 +6,7 @@
 #include <QFileInfo>
 #include <QDataStream>
 #include <QMap>
-#include <QMediaPlayer>
-#include <QAudioOutput>
+#include <mpv/client.h>
 
 class SslServer : public QTcpServer 
 {
@@ -30,16 +29,18 @@ private:
     void playVideo(const QString &filename);
     void toggleAudioPlayback();
     void toggleVideoPlayback();
+    void setAudioVolume(int volume);
+    void setVideoVolume(int volume);
+    int getAudioVolume();
+    int getVideoVolume();
     
     // Track buffers per socket
     QMap<QSslSocket*, QByteArray> socketBuffers;
     QMap<QSslSocket*, quint32> socketExpectedSizes;
     
-    // Media players
-    QMediaPlayer* audioPlayer_ = nullptr;
-    QAudioOutput* audioOutput_ = nullptr;
-    QMediaPlayer* videoPlayer_ = nullptr;
-    QAudioOutput* videoOutput_ = nullptr;
+    // MPV players
+    mpv_handle* audioMpv_ = nullptr;
+    mpv_handle* videoMpv_ = nullptr;
     QString currentAudioFile_;
     QString currentVideoFile_;
 };
