@@ -13,6 +13,7 @@ class SslServer : public QTcpServer
     Q_OBJECT
 public:
     explicit SslServer(QObject *parent = nullptr);
+    ~SslServer();
 protected:
     void incomingConnection(qintptr socketDescriptor) override; // Connection လက်ခံဖို့ override လုပ်ခြင်း
 

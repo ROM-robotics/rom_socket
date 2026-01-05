@@ -65,21 +65,75 @@ KzyBByrueDl2o25D6iWm1so=
 
 SslServer::SslServer(QObject *parent) : QTcpServer(parent) 
 {
+    qDebug() << "Initializing SslServer...";
+    
     // Initialize audio mpv player
     audioMpv_ = mpv_create();
-    if (audioMpv_) {
-        mpv_set_option_string(audioMpv_, "vo", "null"); // No video output for audio
+    if (!audioMpv_) {
+        qCritical() << "Failed to create audio MPV instance";
+    } else {
+        qDebug() << "Audio MPV instance created";
+        
+        mpv_set_option_string(audioMpv_, "vo", "null");
+        mpv_set_option_string(audioMpv_, "video", "no");
+        mpv_set_option_string(audioMpv_, "audio-display", "no");
+        mpv_set_option_string(audioMpv_, "force-window", "no");
+        mpv_set_option_string(audioMpv_, "ytdl", "no");
+        mpv_set_option_string(audioMpv_, "terminal", "no");
+        mpv_set_option_string(audioMpv_, "input-terminal", "no");
         mpv_set_option_string(audioMpv_, "volume", "70");
-        mpv_initialize(audioMpv_);
-        qDebug() << "Audio MPV player initialized";
+        
+        int result = mpv_initialize(audioMpv_);
+        if (result < 0) {
+            qCritical() << "Failed to initialize audio MPV:" << mpv_error_string(result);
+            mpv_terminate_destroy(audioMpv_);
+            audioMpv_ = nullptr;
+        } else {
+            qDebug() << "Audio MPV player initialized successfully";
+        }
     }
     
     // Initialize video mpv player
     videoMpv_ = mpv_create();
-    if (videoMpv_) {
+    if (!videoMpv_) {
+        qCritical() << "Failed to create video MPV instance";
+    } else {
+        qDebug() << "Video MPV instance created";
+        
+        mpv_set_option_string(videoMpv_, "terminal", "no");
+        mpv_set_option_string(videoMpv_, "input-terminal", "no");
+        mpv_set_option_string(videoMpv_, "input-default-bindings", "no");
+        mpv_set_option_string(videoMpv_, "vo", "drm,gpu,null");
         mpv_set_option_string(videoMpv_, "volume", "70");
-        mpv_initialize(videoMpv_);
-        qDebug() << "Video MPV player initialized";
+        
+        int result = mpv_initialize(videoMpv_);
+        if (result < 0) {
+            qCritical() << "Failed to initialize video MPV:" << mpv_error_string(result);
+            mpv_terminate_destroy(videoMpv_);
+            videoMpv_ = nullptr;
+        } else {
+            qDebug() << "Video MPV player initialized successfully";
+        }
+    }
+    
+    qDebug() << "SslServer initialization complete - Audio:" << (audioMpv_ ? "OK" : "FAILED") 
+             << "Video:" << (videoMpv_ ? "OK" : "FAILED");
+}
+
+SslServer::~SslServer()
+{
+    // Clean up audio mpv player
+    if (audioMpv_) {
+        mpv_terminate_destroy(audioMpv_);
+        audioMpv_ = nullptr;
+        qDebug() << "Audio MPV player destroyed";
+    }
+    
+    // Clean up video mpv player
+    if (videoMpv_) {
+        mpv_terminate_destroy(videoMpv_);
+        videoMpv_ = nullptr;
+        qDebug() << "Video MPV player destroyed";
     }
 }
 
@@ -387,7 +441,10 @@ void SslServer::processPackets(QSslSocket *socket, QByteArray &buffer, quint32 &
 
 void SslServer::playAudio(const QString &filename)
 {
-    if (!audioMpv_) return;
+    if (!audioMpv_) {
+        qWarning() << "Audio MPV player not initialized";
+        return;
+    }
     
     QString filePath = audio_directory + filename;
     QFileInfo fileInfo(filePath);
@@ -398,15 +455,25 @@ void SslServer::playAudio(const QString &filename)
     }
     
     currentAudioFile_ = filename;
-    const char* cmd[] = {"loadfile", filePath.toUtf8().constData(), NULL};
-    mpv_command(audioMpv_, cmd);
     
-    qDebug() << "Playing audio file:" << filePath;
+    // Store file path in a persistent QByteArray
+    QByteArray pathData = filePath.toUtf8();
+    const char* cmd[] = {"loadfile", pathData.constData(), NULL};
+    
+    int result = mpv_command_async(audioMpv_, 0, cmd);
+    if (result < 0) {
+        qCritical() << "Failed to play audio:" << mpv_error_string(result);
+    } else {
+        qDebug() << "Playing audio file:" << filePath;
+    }
 }
 
 void SslServer::playVideo(const QString &filename)
 {
-    if (!videoMpv_) return;
+    if (!videoMpv_) {
+        qWarning() << "Video MPV player not initialized";
+        return;
+    }
     
     QString filePath = video_directory + filename;
     QFileInfo fileInfo(filePath);
@@ -417,10 +484,17 @@ void SslServer::playVideo(const QString &filename)
     }
     
     currentVideoFile_ = filename;
-    const char* cmd[] = {"loadfile", filePath.toUtf8().constData(), NULL};
-    mpv_command(videoMpv_, cmd);
     
-    qDebug() << "Playing video file:" << filePath;
+    // Store file path in a persistent QByteArray
+    QByteArray pathData = filePath.toUtf8();
+    const char* cmd[] = {"loadfile", pathData.constData(), NULL};
+    
+    int result = mpv_command_async(videoMpv_, 0, cmd);
+    if (result < 0) {
+        qCritical() << "Failed to play video:" << mpv_error_string(result);
+    } else {
+        qDebug() << "Playing video file:" << filePath;
+    }
 }
 
 void SslServer::toggleAudioPlayback()
