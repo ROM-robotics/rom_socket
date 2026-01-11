@@ -8,6 +8,8 @@ Qt6 based SSL encrypted TCP server/client implementation for secure file transfe
 - ✅ Multiple client support (concurrent connections)
 - ✅ File upload (video/audio)
 - ✅ Command execution (show_video, show_audio, llm_response)
+- ✅ WiFi configuration and management (scan, connect, disconnect)
+- ✅ Media playback control (play, pause, volume)
 - ✅ Embedded SSL certificates (no external files needed)
 - ✅ Cross-platform (Linux, Windows, macOS)
 

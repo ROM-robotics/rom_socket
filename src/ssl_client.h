@@ -60,11 +60,16 @@ private:
     QSslSocket *socket;
     QString certificatePath;
     bool ignoreSslErrors;
+    
+    // Buffering for packet reassembly
+    QByteArray receiveBuffer;
+    quint32 expectedPacketSize;
 
     // Helper methods
     void sendPacket(const QString &type, const QByteArray &data);
     void sendFilePacket(const QString &type, const QString &filename, const QByteArray &fileData);
     QByteArray readFileData(const QString &filePath, bool &success);
+    void processIncomingPackets();
 };
 
 #endif // SSL_CLIENT_H

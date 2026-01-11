@@ -1,0 +1,48 @@
+cmake_minimum_required(VERSION 3.16)
+
+project(rom_socket_test_client VERSION 1.0.0 LANGUAGES CXX)
+
+# C++ Standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Qt MOC, UIC, RCC
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+# Find Qt 6
+find_package(Qt6 REQUIRED COMPONENTS
+    Core
+    Network
+)
+
+# Test WiFi Client
+add_executable(test_wifi
+    test_wifi.cpp
+    src/ssl_client.cpp
+    src/ssl_client.h
+)
+
+target_link_libraries(test_wifi PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+target_include_directories(test_wifi PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Debug mode compiler warnings
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(test_wifi PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+    )
+endif()
+
+# Install
+install(TARGETS test_wifi
+    RUNTIME DESTINATION bin
+)

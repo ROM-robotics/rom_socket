@@ -1,6 +1,7 @@
 #include "ssl_client.h"
 #include <QDebug>
 #include <QFileInfo>
+#include <QSslConfiguration>
 
 // Embedded CA Certificate (optional - server ရဲ့ CA certificate)
 const char* EMBEDDED_CA_CERTIFICATE = R"(
@@ -34,9 +35,11 @@ SslClient::SslClient(QObject *parent)
     : QObject(parent)
     , socket(new QSslSocket(this))
     , ignoreSslErrors(false)
+    , expectedPacketSize(0)
 {
     // Signal connections
     connect(socket, &QSslSocket::connected, this, &SslClient::onConnected);
+    connect(socket, &QSslSocket::encrypted, this, &SslClient::onConnected); // Wait for encryption
     connect(socket, &QSslSocket::disconnected, this, &SslClient::onDisconnected);
     connect(socket, &QSslSocket::readyRead, this, &SslClient::onReadyRead);
     connect(socket, &QSslSocket::sslErrors, this, &SslClient::onSslErrors);
@@ -156,14 +159,18 @@ void SslClient::setCertificatePath(const QString &certPath)
     if (!certPath.isEmpty()) {
         QList<QSslCertificate> certs = QSslCertificate::fromPath(certPath);
         if (!certs.isEmpty()) {
-            socket->addCaCertificates(certs);
+            QSslConfiguration sslConfig = socket->sslConfiguration();
+            sslConfig.addCaCertificates(certs);
+            socket->setSslConfiguration(sslConfig);
             qDebug() << "Loaded certificate from:" << certPath;
         }
     } else {
         // Use embedded CA certificate
         QSslCertificate caCert(QByteArray(EMBEDDED_CA_CERTIFICATE), QSsl::Pem);
         if (!caCert.isNull()) {
-            socket->addCaCertificate(caCert);
+            QSslConfiguration sslConfig = socket->sslConfiguration();
+            sslConfig.addCaCertificate(caCert);
+            socket->setSslConfiguration(sslConfig);
             qDebug() << "Loaded embedded CA certificate";
         }
     }
@@ -190,29 +197,65 @@ void SslClient::onDisconnected()
 
 void SslClient::onReadyRead()
 {
-    QDataStream in(socket);
-    in.setVersion(QDataStream::Qt_6_0);
+    // Append incoming data to buffer
+    receiveBuffer.append(socket->readAll());
+    
+    // Process all complete packets
+    processIncomingPackets();
+}
 
-    // Read packet type
-    QString type;
-    in >> type;
-
-    if (type == "RESPONSE") {
-        QByteArray data;
-        in >> data;
-        QString response = QString::fromUtf8(data);
-        
-        qDebug() << "Received response:" << response;
-        emit responseReceived(response);
-        
-        // Check if it's an upload response
-        if (response.contains("uploaded successfully")) {
-            emit uploadFinished(true, response);
-        } else if (response.contains("Failed to upload")) {
-            emit uploadFinished(false, response);
+void SslClient::processIncomingPackets()
+{
+    while (true) {
+        // If we don't know the packet size yet, try to read it
+        if (expectedPacketSize == 0) {
+            if (receiveBuffer.size() < (int)sizeof(quint32)) {
+                return; // Need more data for size header
+            }
+            
+            // Read packet size from buffer
+            QDataStream sizeStream(receiveBuffer);
+            sizeStream.setVersion(QDataStream::Qt_6_0);
+            sizeStream >> expectedPacketSize;
+            
+            // Remove size header from buffer
+            receiveBuffer.remove(0, sizeof(quint32));
         }
-    } else {
-        qWarning() << "Unknown packet type:" << type;
+        
+        // Check if we have the complete packet
+        if (receiveBuffer.size() < (int)expectedPacketSize) {
+            return; // Need more data for complete packet
+        }
+        
+        // Extract one complete packet
+        QByteArray packet = receiveBuffer.left(expectedPacketSize);
+        receiveBuffer.remove(0, expectedPacketSize);
+        expectedPacketSize = 0; // Reset for next packet
+        
+        // Parse the packet
+        QDataStream stream(&packet, QIODevice::ReadOnly);
+        stream.setVersion(QDataStream::Qt_6_0);
+        
+        QString type;
+        stream >> type;
+
+        if (type == "RESPONSE") {
+            QByteArray data;
+            stream >> data;
+            QString response = QString::fromUtf8(data);
+            
+            qDebug().noquote() << "Received response:" << response;
+            emit responseReceived(response);
+            
+            // Check if it's an upload response
+            if (response.contains("uploaded successfully")) {
+                emit uploadFinished(true, response);
+            } else if (response.contains("Failed to upload")) {
+                emit uploadFinished(false, response);
+            }
+        } else {
+            qWarning() << "Unknown packet type:" << type;
+        }
     }
 }
 
@@ -245,10 +288,17 @@ void SslClient::sendPacket(const QString &type, const QByteArray &data)
         return;
     }
 
+    // Build packet in memory first
+    QByteArray packet;
+    QDataStream stream(&packet, QIODevice::WriteOnly);
+    stream.setVersion(QDataStream::Qt_6_0);
+    stream << type << data;
+    
+    // Send packet size first, then packet data
     QDataStream out(socket);
     out.setVersion(QDataStream::Qt_6_0);
-    
-    out << type << data;
+    out << quint32(packet.size());
+    socket->write(packet);
     socket->flush();
 }
 
@@ -259,10 +309,17 @@ void SslClient::sendFilePacket(const QString &type, const QString &filename, con
         return;
     }
 
+    // Build packet in memory first
+    QByteArray packet;
+    QDataStream stream(&packet, QIODevice::WriteOnly);
+    stream.setVersion(QDataStream::Qt_6_0);
+    stream << type << filename << fileData;
+    
+    // Send packet size first, then packet data
     QDataStream out(socket);
     out.setVersion(QDataStream::Qt_6_0);
-    
-    out << type << filename << fileData;
+    out << quint32(packet.size());
+    socket->write(packet);
     socket->flush();
 }
 
