@@ -143,37 +143,82 @@ SslServer::~SslServer()
 
 void SslServer::incomingConnection(qintptr socketDescriptor) 
 {
+    qDebug() << "=== New Incoming Connection ===";
+    qDebug() << "Socket Descriptor:" << socketDescriptor;
+    
     QSslSocket *socket = new QSslSocket(this);
 
     if (socket->setSocketDescriptor(socketDescriptor)) 
     {
+        qDebug() << "Socket descriptor set successfully";
+        qDebug() << "Client address:" << socket->peerAddress().toString();
+        qDebug() << "Client port:" << socket->peerPort();
+        
         // Embedded certificate နဲ့ key ကို load လုပ်ခြင်း
+        qDebug() << "Loading SSL certificate and private key...";
         QSslCertificate certificate(QByteArray(EMBEDDED_CERTIFICATE), QSsl::Pem);
         QSslKey privateKey(QByteArray(EMBEDDED_PRIVATE_KEY), QSsl::Rsa, QSsl::Pem);
         
         if (certificate.isNull()) {
-            qCritical() << "Failed to load embedded certificate";
+            qCritical() << "Failed to load embedded certificate!";
         } else if (privateKey.isNull()) {
-            qCritical() << "Failed to load embedded private key";
+            qCritical() << "Failed to load embedded private key!";
         } else {
+            qDebug() << "Certificate Subject:" << certificate.subjectDisplayName();
+            qDebug() << "Certificate Issuer:" << certificate.issuerDisplayName();
             socket->setLocalCertificate(certificate);
             socket->setPrivateKey(privateKey);
-            qDebug() << "Loaded embedded SSL certificate";
+            qDebug() << "SSL certificate and key loaded successfully";
         }
         
         socket->setProtocol(QSsl::TlsV1_2OrLater);
+        qDebug() << "SSL protocol set to TLS 1.2 or later";
 
         // Encryption စတင်ခြင်း
+        qDebug() << "Starting server-side SSL encryption...";
         socket->startServerEncryption();
+        qDebug() << "Waiting for SSL handshake...";
+        
+        // Add encrypted signal handler
+        connect(socket, &QSslSocket::encrypted, [socket]() {
+            qDebug() << "=== SSL Handshake Completed Successfully ===";
+            qDebug() << "Encrypted connection established with" << socket->peerAddress().toString();
+            qDebug() << "Cipher:" << socket->sessionCipher().name();
+        });
+        
+        // Add error signal handler
+        connect(socket, QOverload<const QList<QSslError> &>::of(&QSslSocket::sslErrors),
+                [socket](const QList<QSslError> &errors) {
+            qWarning() << "=== SSL Errors on Server ===";
+            for (const QSslError &error : errors) {
+                qWarning() << "SSL Error:" << error.errorString();
+            }
+            // Ignore errors for self-signed certificate
+            socket->ignoreSslErrors();
+        });
+        
+        connect(socket, &QSslSocket::errorOccurred,
+                [socket](QAbstractSocket::SocketError error) {
+            qCritical() << "=== Socket Error on Server ===";
+            qCritical() << "Error code:" << error;
+            qCritical() << "Error string:" << socket->errorString();
+        });
 
         connect(socket, &QSslSocket::readyRead, [this, socket]() 
         {
+            qDebug() << "=== Data Ready to Read ===";
+            qint64 bytesAvailable = socket->bytesAvailable();
+            qDebug() << "Bytes available:" << bytesAvailable;
+            
             // Get or create buffer for this socket
             QByteArray &buffer = socketBuffers[socket];
             quint32 &expectedSize = socketExpectedSizes[socket];
             
             // Append incoming data to buffer
-            buffer.append(socket->readAll());
+            QByteArray newData = socket->readAll();
+            qDebug() << "Read" << newData.size() << "bytes from socket";
+            buffer.append(newData);
+            qDebug() << "Total buffer size:" << buffer.size();
             
             // Process all complete packets
             processPackets(socket, buffer, expectedSize);
@@ -181,6 +226,9 @@ void SslServer::incomingConnection(qintptr socketDescriptor)
         
         connect(socket, &QSslSocket::disconnected, [this, socket]() 
         {
+            qDebug() << "=== Client Disconnected ===";
+            qDebug() << "Client was:" << socket->peerAddress().toString();
+            
             // Clean up buffers when socket disconnects
             socketBuffers.remove(socket);
             socketExpectedSizes.remove(socket);
