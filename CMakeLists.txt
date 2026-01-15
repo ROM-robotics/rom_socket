@@ -26,6 +26,8 @@ set(PROJECT_SOURCES
     src/main.cpp
     src/ssl_server.cpp
     src/ssl_server.h
+    src/wifi_configurator.cpp
+    src/wifi_configurator.h
 )
 
 # Executable ဖန်တီးခြင်း
