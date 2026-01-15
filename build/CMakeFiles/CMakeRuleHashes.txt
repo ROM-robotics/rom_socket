@@ -1,0 +1,2 @@
+# Hashes of file build rules.
+04db12786fa621777a8829dabec9a1df CMakeFiles/rom_socket_autogen

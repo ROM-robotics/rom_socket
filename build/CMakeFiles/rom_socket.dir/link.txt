@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/rom_socket.dir/rom_socket_autogen/mocs_compilation.cpp.o CMakeFiles/rom_socket.dir/src/main.cpp.o CMakeFiles/rom_socket.dir/src/ssl_server.cpp.o -o rom_socket  /usr/lib/x86_64-linux-gnu/libQt6Network.so.6.2.4 /usr/lib/x86_64-linux-gnu/libQt6Core.so.6.2.4 /usr/lib/x86_64-linux-gnu/libmpv.so 

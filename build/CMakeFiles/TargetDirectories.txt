@@ -1,0 +1,8 @@
+/home/mr_robot/Desktop/Git/rom_socket/build/CMakeFiles/rom_socket.dir
+/home/mr_robot/Desktop/Git/rom_socket/build/CMakeFiles/edit_cache.dir
+/home/mr_robot/Desktop/Git/rom_socket/build/CMakeFiles/rebuild_cache.dir
+/home/mr_robot/Desktop/Git/rom_socket/build/CMakeFiles/list_install_components.dir
+/home/mr_robot/Desktop/Git/rom_socket/build/CMakeFiles/install.dir
+/home/mr_robot/Desktop/Git/rom_socket/build/CMakeFiles/install/local.dir
+/home/mr_robot/Desktop/Git/rom_socket/build/CMakeFiles/install/strip.dir
+/home/mr_robot/Desktop/Git/rom_socket/build/CMakeFiles/rom_socket_autogen.dir

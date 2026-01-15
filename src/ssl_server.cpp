@@ -67,10 +67,6 @@ SslServer::SslServer(QObject *parent) : QTcpServer(parent)
 {
     qDebug() << "Initializing SslServer...";
     
-    // Initialize WiFi manager
-    wifiManager_ = new WiFiManager(this);
-    qDebug() << "WiFi Manager initialized";
-    
     // Initialize audio mpv player
     audioMpv_ = mpv_create();
     if (!audioMpv_) {
@@ -121,19 +117,11 @@ SslServer::SslServer(QObject *parent) : QTcpServer(parent)
     }
     
     qDebug() << "SslServer initialization complete - Audio:" << (audioMpv_ ? "OK" : "FAILED") 
-             << "Video:" << (videoMpv_ ? "OK" : "FAILED")
-             << "WiFi:" << (wifiManager_ ? "OK" : "FAILED");
+             << "Video:" << (videoMpv_ ? "OK" : "FAILED");
 }
 
 SslServer::~SslServer()
 {
-    // Clean up WiFi manager
-    if (wifiManager_) {
-        delete wifiManager_;
-        wifiManager_ = nullptr;
-        qDebug() << "WiFi Manager destroyed";
-    }
-    
     // Clean up audio mpv player
     if (audioMpv_) {
         mpv_terminate_destroy(audioMpv_);
@@ -404,10 +392,6 @@ void SslServer::processPackets(QSslSocket *socket, QByteArray &buffer, quint32 &
             } else if (command == "llm_response") {
                 response = llmResponse(command);
                 qDebug() << "Sending LLM response to client";
-            } else if (command.startsWith("wifi_")) {
-                // WiFi commands
-                response = handleWiFiCommand(command);
-                qDebug() << "WiFi command processed:" << command;
             } else {
                 response = "Unknown command: " + command;
                 qDebug() << "Unknown command received";
@@ -589,168 +573,4 @@ int SslServer::getVideoVolume()
     mpv_get_property(videoMpv_, "volume", MPV_FORMAT_INT64, &volume);
     
     return static_cast<int>(volume);
-}
-
-// ==================== WiFi Management Methods ====================
-
-QString SslServer::handleWiFiCommand(const QString &command)
-{
-    if (!wifiManager_) {
-        return "Error: WiFi Manager not initialized";
-    }
-    
-    if (command == "wifi_scan") {
-        return scanWiFiNetworks();
-    } else if (command == "wifi_status") {
-        return getWiFiStatus();
-    } else if (command == "wifi_saved") {
-        return getSavedWiFiNetworks();
-    } else if (command == "wifi_disconnect") {
-        return disconnectWiFi();
-    } else if (command == "wifi_enable") {
-        return enableWiFiRadio();
-    } else if (command == "wifi_disable") {
-        return disableWiFiRadio();
-    } else if (command.startsWith("wifi_connect:")) {
-        // Format: wifi_connect:SSID:PASSWORD
-        QString params = command.mid(13); // Remove "wifi_connect:" prefix
-        QStringList parts = params.split(':', Qt::SkipEmptyParts);
-        
-        if (parts.size() < 1) {
-            return "Error: Invalid format. Use wifi_connect:SSID or wifi_connect:SSID:PASSWORD";
-        }
-        
-        QString ssid = parts[0];
-        QString password = parts.size() > 1 ? parts[1] : "";
-        
-        return connectToWiFi(ssid, password);
-    } else if (command.startsWith("wifi_delete:")) {
-        QString ssid = command.mid(12); // Remove "wifi_delete:" prefix
-        return deleteWiFiConnection(ssid);
-    } else {
-        return "Unknown WiFi command. Available: wifi_scan, wifi_status, wifi_saved, wifi_connect:SSID:PASSWORD, wifi_disconnect, wifi_delete:SSID, wifi_enable, wifi_disable";
-    }
-}
-
-QString SslServer::scanWiFiNetworks()
-{
-    QList<WiFiNetwork> networks = wifiManager_->scanNetworks();
-    
-    if (networks.isEmpty()) {
-        return "No networks found or WiFi is disabled";
-    }
-    
-    QString result = "WiFi Networks:\n";
-    result += QString("=").repeated(80) + "\n";
-    result += QString("SSID").leftJustified(32) + 
-              QString("BSSID").leftJustified(20) + 
-              QString("Signal").leftJustified(10) + 
-              QString("Security").leftJustified(17) + 
-              QString("Active\n");
-    result += QString("-").repeated(80) + "\n";
-    
-    for (const WiFiNetwork &network : networks) {
-        result += QString(network.ssid).leftJustified(32) +
-                  QString(network.bssid).leftJustified(20) +
-                  QString("%1%").arg(network.signal).leftJustified(10) +
-                  QString(network.security).leftJustified(17) +
-                  QString(network.inUse ? "Yes" : "No") + "\n";
-    }
-    
-    result += QString("=").repeated(80) + "\n";
-    result += QString("Total: %1 networks").arg(networks.size());
-    
-    return result;
-}
-
-QString SslServer::connectToWiFi(const QString &ssid, const QString &password)
-{
-    bool success = wifiManager_->connectToNetwork(ssid, password);
-    
-    if (success) {
-        return "Successfully connected to: " + ssid;
-    } else {
-        return "Failed to connect to: " + ssid;
-    }
-}
-
-QString SslServer::disconnectWiFi()
-{
-    bool success = wifiManager_->disconnectFromNetwork();
-    
-    if (success) {
-        return "Successfully disconnected from WiFi";
-    } else {
-        return "Failed to disconnect from WiFi";
-    }
-}
-
-QString SslServer::getWiFiStatus()
-{
-    QString status = wifiManager_->getConnectionStatus();
-    QString currentNetwork = wifiManager_->getCurrentConnection();
-    bool wifiEnabled = wifiManager_->isWiFiEnabled();
-    
-    QString result = "WiFi Status:\n";
-    result += "=" + QString("=").repeated(50) + "\n";
-    result += QString("WiFi Radio:        %1\n").arg(wifiEnabled ? "Enabled" : "Disabled");
-    result += QString("Current Network:   %1\n").arg(currentNetwork);
-    result += QString("Status:            %1\n").arg(status);
-    result += QString("=").repeated(50);
-    
-    return result;
-}
-
-QString SslServer::getSavedWiFiNetworks()
-{
-    QStringList savedNetworks = wifiManager_->getSavedConnections();
-    
-    if (savedNetworks.isEmpty()) {
-        return "No saved WiFi networks found";
-    }
-    
-    QString result = "Saved WiFi Networks:\n";
-    result += "=" + QString("=").repeated(50) + "\n";
-    
-    for (int i = 0; i < savedNetworks.size(); ++i) {
-        result += QString("%1. %2\n").arg(i + 1).arg(savedNetworks[i]);
-    }
-    
-    result += QString("=").repeated(50) + "\n";
-    result += QString("Total: %1 saved networks").arg(savedNetworks.size());
-    
-    return result;
-}
-
-QString SslServer::deleteWiFiConnection(const QString &ssid)
-{
-    bool success = wifiManager_->deleteSavedConnection(ssid);
-    
-    if (success) {
-        return "Successfully deleted saved connection: " + ssid;
-    } else {
-        return "Failed to delete connection: " + ssid;
-    }
-}
-
-QString SslServer::enableWiFiRadio()
-{
-    bool success = wifiManager_->enableWiFi();
-    
-    if (success) {
-        return "WiFi radio enabled successfully";
-    } else {
-        return "Failed to enable WiFi radio";
-    }
-}
-
-QString SslServer::disableWiFiRadio()
-{
-    bool success = wifiManager_->disableWiFi();
-    
-    if (success) {
-        return "WiFi radio disabled successfully";
-    } else {
-        return "Failed to disable WiFi radio";
-    }
 }
