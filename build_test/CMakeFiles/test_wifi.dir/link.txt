@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/test_wifi.dir/test_wifi_autogen/mocs_compilation.cpp.o CMakeFiles/test_wifi.dir/home/mr_robot/Desktop/Git/rom_socket/test_wifi.cpp.o CMakeFiles/test_wifi.dir/home/mr_robot/Desktop/Git/rom_socket/src/ssl_client.cpp.o -o test_wifi  /usr/lib/x86_64-linux-gnu/libQt6Network.so.6.2.4 /usr/lib/x86_64-linux-gnu/libQt6Core.so.6.2.4 

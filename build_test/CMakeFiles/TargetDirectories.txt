@@ -1,4 +1,0 @@
-/home/mr_robot/Desktop/Git/rom_socket/build_test/CMakeFiles/test_wifi.dir
-/home/mr_robot/Desktop/Git/rom_socket/build_test/CMakeFiles/edit_cache.dir
-/home/mr_robot/Desktop/Git/rom_socket/build_test/CMakeFiles/rebuild_cache.dir
-/home/mr_robot/Desktop/Git/rom_socket/build_test/CMakeFiles/test_wifi_autogen.dir
