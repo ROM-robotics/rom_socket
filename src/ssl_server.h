@@ -2,6 +2,7 @@
 #include <QSslSocket>
 #include <QSslKey>
 #include <QSslCertificate>
+#include <QSslCipher>
 #include <QDir>
 #include <QFileInfo>
 #include <QDataStream>
