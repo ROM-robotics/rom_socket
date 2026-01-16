@@ -8,7 +8,6 @@
 #include <QDataStream>
 #include <QMap>
 #include <mpv/client.h>
-#include "wifi_configurator.h"
 
 class SslServer : public QTcpServer 
 {
@@ -37,12 +36,6 @@ private:
     int getAudioVolume();
     int getVideoVolume();
     
-    // WiFi configuration
-    QString handleSearchWiFi();
-    QString handleConnectWiFi(const QString &ssid, const QString &password);
-    QString handleDisconnectWiFi();
-    QString handleCurrentWiFi();
-    
     // Track buffers per socket
     QMap<QSslSocket*, QByteArray> socketBuffers;
     QMap<QSslSocket*, quint32> socketExpectedSizes;
@@ -52,7 +45,4 @@ private:
     mpv_handle* videoMpv_ = nullptr;
     QString currentAudioFile_;
     QString currentVideoFile_;
-    
-    // WiFi configurator
-    WiFiConfigurator *m_wifiConfig;
 };

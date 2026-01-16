@@ -67,10 +67,6 @@ SslServer::SslServer(QObject *parent) : QTcpServer(parent)
 {
     qDebug() << "Initializing SslServer...";
     
-    // Initialize WiFi configurator
-    m_wifiConfig = new WiFiConfigurator(this);
-    qDebug() << "WiFi configurator initialized";
-    
     // Initialize audio mpv player
     audioMpv_ = mpv_create();
     if (!audioMpv_) {
@@ -444,26 +440,6 @@ void SslServer::processPackets(QSslSocket *socket, QByteArray &buffer, quint32 &
             } else if (command == "llm_response") {
                 response = llmResponse(command);
                 qDebug() << "Sending LLM response to client";
-            } else if (command == "SEARCH_WIFI") {
-                response = handleSearchWiFi();
-                qDebug() << "Sending WiFi search results to client";
-            } else if (command.startsWith("CONNECT_WIFI:")) {
-                QString params = command.mid(13); // Remove "CONNECT_WIFI:" prefix
-                QStringList parts = params.split(":");
-                if (parts.size() >= 1) {
-                    QString ssid = parts[0];
-                    QString password = parts.size() > 1 ? parts[1] : "";
-                    response = handleConnectWiFi(ssid, password);
-                } else {
-                    response = "ERROR:Invalid CONNECT_WIFI format";
-                }
-                qDebug() << "Sending WiFi connect response to client";
-            } else if (command == "DISCONNECT_WIFI") {
-                response = handleDisconnectWiFi();
-                qDebug() << "Sending WiFi disconnect response to client";
-            } else if (command == "CURRENT_WIFI") {
-                response = handleCurrentWiFi();
-                qDebug() << "Sending current WiFi info to client";
             } else {
                 response = "Unknown command: " + command;
                 qDebug() << "Unknown command received";
@@ -645,71 +621,4 @@ int SslServer::getVideoVolume()
     mpv_get_property(videoMpv_, "volume", MPV_FORMAT_INT64, &volume);
     
     return static_cast<int>(volume);
-}
-
-QString SslServer::handleSearchWiFi()
-{
-    qDebug() << "Searching for WiFi networks...";
-    QList<WiFiConfigurator::NetworkInfo> networks = m_wifiConfig->searchWiFi();
-    
-    if (networks.isEmpty()) {
-        QString error = m_wifiConfig->getLastError();
-        if (!error.isEmpty()) {
-            return "ERROR:" + error;
-        }
-        return "WIFI_LIST:";
-    }
-    
-    // Format: WIFI_LIST:ssid1:signal1:security1:connected,ssid2:signal2:security2:connected,...
-    QStringList networkList;
-    for (const auto &network : networks) {
-        QString networkStr = QString("%1:%2:%3:%4")
-            .arg(network.ssid)
-            .arg(network.signal)
-            .arg(network.security)
-            .arg(network.isConnected ? "yes" : "no");
-        networkList.append(networkStr);
-    }
-    
-    return "WIFI_LIST:" + networkList.join(",");
-}
-
-QString SslServer::handleConnectWiFi(const QString &ssid, const QString &password)
-{
-    qDebug() << "Connecting to WiFi:" << ssid;
-    bool success = m_wifiConfig->connectWiFi(ssid, password);
-    
-    if (success) {
-        return "CONNECT_OK:" + ssid;
-    } else {
-        QString error = m_wifiConfig->getLastError();
-        return "ERROR:" + (error.isEmpty() ? "Connection failed" : error);
-    }
-}
-
-QString SslServer::handleDisconnectWiFi()
-{
-    qDebug() << "Disconnecting WiFi...";
-    bool success = m_wifiConfig->disconnectWiFi();
-    
-    if (success) {
-        return "DISCONNECT_OK";
-    } else {
-        QString error = m_wifiConfig->getLastError();
-        return "ERROR:" + (error.isEmpty() ? "Disconnection failed" : error);
-    }
-}
-
-QString SslServer::handleCurrentWiFi()
-{
-    qDebug() << "Getting current WiFi info...";
-    QString ssid = m_wifiConfig->getCurrentSSID();
-    QString ip = m_wifiConfig->getCurrentIP();
-    
-    if (ssid.isEmpty()) {
-        return "CURRENT_WIFI:Not connected::";
-    }
-    
-    // Format: CURRENT_WIFI:ssid:ip
-    return QString("CURRENT_WIFI:%1:%2").arg(ssid).arg(ip);
 }
